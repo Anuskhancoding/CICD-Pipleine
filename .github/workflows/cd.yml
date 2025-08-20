@@ -1,51 +1,44 @@
-name: CD Pipeline
+name: CI Pipeline
 
 on:
-  workflow_run:
-    workflows: ["CI Pipeline"]
-    types:
-      - completed
+  push:
+    branches: [ main ]
 
 jobs:
-  deploy:
-    runs-on: self-hosted
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  build:
+    runs-on: ubuntu-latest
     
     steps:
-    - name: Download artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: website-files
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        run-id: ${{ github.event.workflow_run.id }}
-    
-    - name: Extract files
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Check if HTML file exists
       run: |
-        echo "Extracting files..."
-        unzip -o website.zip
-        echo "Files extracted!"
-        ls -la
-    
-    - name: Stop existing server
-      run: |
-        echo "Stopping any existing server on port 3000..."
-        pkill -f "python3.*3000" || echo "No existing server found"
-        sleep 2
-    
-    - name: Start web server
-      run: |
-        echo "Starting web server on port 3000..."
-        nohup python3 -m http.server 3000 > server.log 2>&1 &
-        sleep 3
-        echo "Server started!"
-        
-    - name: Verify deployment
-      run: |
-        echo "Checking if server is running..."
-        if curl -s http://localhost:3000 > /dev/null; then
-          echo "✅ Website is live at http://localhost:3000"
-          echo "✅ Access from outside: http://YOUR-IP:3000"
+        if [ -f "index.html" ]; then
+          echo "HTML file found!"
         else
-          echo "❌ Server not responding"
+          echo "HTML file not found!"
           exit 1
         fi
+    
+    - name: Validate HTML
+      run: |
+        echo "Checking HTML syntax..."
+        if grep -q "<!DOCTYPE html>" index.html && grep -q "<html" index.html && grep -q "</html>" index.html; then
+          echo "HTML looks good!"
+        else
+          echo "Basic HTML structure not found!"
+          exit 1
+        fi
+    
+    - name: Create artifact
+      run: |
+        echo "Creating artifact..."
+        zip -r website.zip index.html
+        echo "Artifact created successfully!"
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: website-files
+        path: website.zip
