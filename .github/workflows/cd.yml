@@ -27,32 +27,50 @@ jobs:
         echo "Files extracted to /home/hp/website/!"
         ls -la /home/hp/website/
     
-    - name: Stop existing server
+    - name: Create systemd service file
       run: |
-        echo "Stopping any existing server on port 3000..."
-        pkill -f "python3.*http.server.*3000" || echo "No existing server found"
-        # Also kill any existing screen sessions
-        screen -S webserver -X quit 2>/dev/null || echo "No existing screen session"
-        sleep 2
+        echo "Creating systemd service..."
+        sudo tee /etc/systemd/system/webserver.service << EOF
+        [Unit]
+        Description=Simple HTTP Server for CI/CD
+        After=network.target
         
-    - name: Start web server in screen
+        [Service]
+        Type=simple
+        User=hp
+        WorkingDirectory=/home/hp/website
+        ExecStart=/usr/bin/python3 -m http.server 3000 --bind 0.0.0.0
+        Restart=always
+        RestartSec=3
+        
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+        echo "Service file created"
+    
+    - name: Stop and start webserver service
       run: |
-        echo "Starting web server on port 3000 in screen session..."
-        cd /home/hp/website
-        # Start server in detached screen session
-        screen -dmS webserver python3 -m http.server 3000 --bind 0.0.0.0
-        sleep 3
-        echo "Server started in detached screen session 'webserver'"
+        echo "Managing webserver service..."
+        # Stop existing service if running
+        sudo systemctl stop webserver || echo "Service not running"
+        # Reload systemd to pick up any changes
+        sudo systemctl daemon-reload
+        # Start the service
+        sudo systemctl start webserver
+        # Enable it to start on boot
+        sudo systemctl enable webserver
+        echo "Webserver service started"
         
     - name: Verify server is accessible
       run: |
         echo "Testing server accessibility..."
-        sleep 2
-        # Check if screen session exists
-        if screen -ls | grep -q webserver; then
-          echo "✅ Screen session 'webserver' is running"
+        sleep 3
+        # Check service status
+        if sudo systemctl is-active --quiet webserver; then
+          echo "✅ Webserver service is active"
         else
-          echo "❌ Screen session not found"
+          echo "❌ Webserver service failed to start"
+          sudo systemctl status webserver
           exit 1
         fi
         
@@ -71,7 +89,7 @@ jobs:
           exit 1
         fi
         
-        echo "🚀 Deployment complete! Website running in screen session."
+        echo "🚀 Deployment complete! Website running as systemd service."
         echo "📱 Access your website at: http://192.168.100.143:3000"
-        echo "🔧 To check server: screen -r webserver"
-        echo "🔧 To detach from screen: Ctrl+A then D"
+        echo "🔧 To check status: sudo systemctl status webserver"
+        echo "🔧 To stop: sudo systemctl stop webserver"
