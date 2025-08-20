@@ -1,0 +1,51 @@
+name: CD Pipeline
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: website-files
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        run-id: ${{ github.event.workflow_run.id }}
+    
+    - name: Extract files
+      run: |
+        echo "Extracting files..."
+        unzip -o website.zip
+        echo "Files extracted!"
+        ls -la
+    
+    - name: Stop existing server
+      run: |
+        echo "Stopping any existing server on port 3000..."
+        pkill -f "python3.*3000" || echo "No existing server found"
+        sleep 2
+    
+    - name: Start web server
+      run: |
+        echo "Starting web server on port 3000..."
+        nohup python3 -m http.server 3000 > server.log 2>&1 &
+        sleep 3
+        echo "Server started!"
+        
+    - name: Verify deployment
+      run: |
+        echo "Checking if server is running..."
+        if curl -s http://localhost:3000 > /dev/null; then
+          echo "✅ Website is live at http://localhost:3000"
+          echo "✅ Access from outside: http://YOUR-IP:3000"
+        else
+          echo "❌ Server not responding"
+          exit 1
+        fi

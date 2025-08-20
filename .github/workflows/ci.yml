@@ -1,0 +1,44 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Check if HTML file exists
+      run: |
+        if [ -f "index.html" ]; then
+          echo "HTML file found!"
+        else
+          echo "HTML file not found!"
+          exit 1
+        fi
+    
+    - name: Validate HTML
+      run: |
+        echo "Checking HTML syntax..."
+        if grep -q "<html>" index.html; then
+          echo "HTML looks good!"
+        else
+          echo "Invalid HTML!"
+          exit 1
+        fi
+    
+    - name: Create artifact
+      run: |
+        echo "Creating artifact..."
+        zip -r website.zip index.html
+        echo "Artifact created successfully!"
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: website-files
+        path: website.zip
