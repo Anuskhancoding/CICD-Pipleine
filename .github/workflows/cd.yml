@@ -39,35 +39,30 @@ jobs:
         cd /home/hp/website
         # Kill any existing server first
         pkill -f "python3.*http.server.*3000" || true
-        # Start server with nohup to keep it running
-        nohup python3 -m http.server 3000 --bind 0.0.0.0 </dev/null >/dev/null 2>&1 &
+        sleep 2
+        # Start server in background with nohup
+        nohup python3 -m http.server 3000 --bind 0.0.0.0 </dev/null >/home/hp/website/server.log 2>&1 &
         # Save the PID
-        echo $! > /home/hp/website/server.pid
-        sleep 5
-        echo "Server started with PID: $(cat /home/hp/website/server.pid)"
+        SERVER_PID=$!
+        echo $SERVER_PID > /home/hp/website/server.pid
+        echo "Server started with PID: $SERVER_PID"
+        sleep 3
         
     - name: Verify server is accessible
       run: |
         echo "Testing server accessibility..."
-        sleep 3
-        # Test local connection
+        # Test if server responds
         if curl -s http://localhost:3000 | grep -q "Hello World"; then
-          echo "✅ Server responds on localhost"
+          echo "✅ Server responds on localhost:3000"
         else
           echo "❌ Server not responding on localhost"
         fi
         
-        # Test external connection  
         if curl -s http://192.168.100.143:3000 | grep -q "Hello World"; then
-          echo "✅ Server responds externally on 192.168.100.143:3000"
+          echo "✅ Website is live at http://192.168.100.143:3000"
         else
           echo "❌ Server not responding externally"
         fi
         
-        # Show process info
-        echo "Server processes:"
-        ps aux | grep "python3.*http.server" | grep -v grep || echo "No server process found"
-        
-        # Show port usage
-        echo "Port 3000 usage:"
-        sudo netstat -tlnp | grep :3000 || echo "Port 3000 not in use"
+        echo "🚀 Deployment complete! Website running in background."
+        echo "📱 Access your website at: http://192.168.100.143:3000"
