@@ -24,10 +24,10 @@ jobs:
     - name: Validate HTML
       run: |
         echo "Checking HTML syntax..."
-        if grep -q "<html>" index.html; then
+        if grep -q "<!DOCTYPE html>" index.html && grep -q "<html" index.html && grep -q "</html>" index.html; then
           echo "HTML looks good!"
         else
-          echo "Invalid HTML!"
+          echo "Basic HTML structure not found!"
           exit 1
         fi
     
