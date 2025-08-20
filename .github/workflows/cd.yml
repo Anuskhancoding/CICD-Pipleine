@@ -1,5 +1,4 @@
 name: CD Pipeline
-
 on:
   workflow_run:
     workflows: ["CI Pipeline"]
@@ -36,10 +35,10 @@ jobs:
       run: |
         echo "Creating startup script..."
         cat > /home/hp/website/start_server.sh << 'EOF'
-#!/bin/bash
-cd /home/hp/website
-exec python3 -m http.server 3000 --bind 0.0.0.0
-EOF
+        #!/bin/bash
+        cd /home/hp/website
+        exec python3 -m http.server 3000 --bind 0.0.0.0
+        EOF
         chmod +x /home/hp/website/start_server.sh
         echo "Startup script created"
         
