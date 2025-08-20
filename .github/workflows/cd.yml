@@ -29,7 +29,21 @@ jobs:
     - name: Stop existing server
       run: |
         echo "Stopping any existing server on port 3000..."
-        pkill -f "python3.*http.server.*3000" || echo "No existing server found"
+        
+        # Stop systemd service if it exists
+        if systemctl is-active --quiet website.service 2>/dev/null; then
+          sudo systemctl stop website.service
+          echo "Stopped systemd service"
+        fi
+        
+        # Kill any remaining python servers on port 3000
+        pkill -f "python3.*http.server.*3000" || echo "No existing python server found"
+        
+        # Also check for processes using port 3000
+        if lsof -ti:3000 >/dev/null 2>&1; then
+          echo "Killing processes on port 3000..."
+          sudo kill -9 $(lsof -ti:3000) || echo "Could not kill processes on port 3000"
+        fi
         
     - name: Create start script
       run: |
@@ -42,34 +56,83 @@ jobs:
         chmod +x /home/hp/website/start_server.sh
         echo "Startup script created"
         
-    - name: Start web server with setsid
+    - name: Start web server with systemd or nohup
       run: |
         echo "Starting web server on port 3000..."
         cd /home/hp/website
-        # Use setsid to create new session that survives parent death
-        setsid python3 -m http.server 3000 --bind 0.0.0.0 </dev/null >/home/hp/website/server.log 2>&1 &
+        
+        # Method 1: Try using systemd service (recommended)
+        if command -v systemctl >/dev/null 2>&1; then
+          echo "Creating systemd service..."
+          sudo tee /etc/systemd/system/website.service > /dev/null << 'EOF'
+        [Unit]
+        Description=Website HTTP Server
+        After=network.target
+        
+        [Service]
+        Type=simple
+        User=hp
+        WorkingDirectory=/home/hp/website
+        ExecStart=/usr/bin/python3 -m http.server 3000 --bind 0.0.0.0
+        Restart=always
+        RestartSec=3
+        StandardOutput=append:/home/hp/website/server.log
+        StandardError=append:/home/hp/website/server.log
+        
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+          
+          sudo systemctl daemon-reload
+          sudo systemctl enable website.service
+          sudo systemctl restart website.service
+          echo "Website service started with systemd"
+          
+        else
+          # Method 2: Fallback to nohup with disown
+          echo "Using nohup method..."
+          nohup python3 -m http.server 3000 --bind 0.0.0.0 </dev/null >/home/hp/website/server.log 2>&1 &
+          PYTHON_PID=$!
+          disown $PYTHON_PID
+          echo "Server started with PID: $PYTHON_PID"
+          echo $PYTHON_PID > /home/hp/website/server.pid
+        fi
+        
         sleep 3
-        echo "Server started with setsid"
         
     - name: Verify server is accessible
       run: |
         echo "Testing server accessibility..."
-        sleep 2
+        sleep 5
         
-        # Test if server responds
-        if curl -s http://localhost:3000 | grep -q "Hello World"; then
-          echo "Server responds on localhost:3000"
+        # Check if systemd service is running
+        if systemctl is-active --quiet website.service 2>/dev/null; then
+          echo "Systemd service is active"
+        fi
+        
+        # Test if server responds locally
+        for i in {1..10}; do
+          if curl -s http://localhost:3000 >/dev/null 2>&1; then
+            echo "Server responds on localhost:3000"
+            break
+          else
+            echo "Attempt $i: Server not ready, waiting..."
+            sleep 2
+          fi
+        done
+        
+        # Test external accessibility
+        if curl -s http://192.168.100.143:3000 >/dev/null 2>&1; then
+          echo "✅ Website is live at http://192.168.100.143:3000"
         else
-          echo "Server not responding on localhost"
+          echo "❌ Server not responding externally"
+          echo "Checking server status..."
+          if systemctl is-active --quiet website.service 2>/dev/null; then
+            sudo systemctl status website.service --no-pager
+          fi
+          ps aux | grep python3 | grep http.server || echo "No python server process found"
           exit 1
         fi
         
-        if curl -s http://192.168.100.143:3000 | grep -q "Hello World"; then
-          echo "Website is live at http://192.168.100.143:3000"
-        else
-          echo "Server not responding externally"
-          exit 1
-        fi
-        
-        echo "Deployment complete! Website running with setsid."
-        echo "Access your website at: http://192.168.100.143:3000"
+        echo "🎉 Deployment complete! Website running persistently."
+        echo "🌐 Access your website at: http://192.168.100.143:3000"
