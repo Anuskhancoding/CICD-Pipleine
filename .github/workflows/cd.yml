@@ -120,10 +120,10 @@ jobs:
             sleep 2
           fi
         done
-        
+
         # Test external accessibility
-        if curl -s http://192.168.100.143:3000 >/dev/null 2>&1; then
-          echo "✅ Website is live at http://192.168.100.143:3000"
+        if curl -s http://172.26.60.61:3000 >/dev/null 2>&1; then
+          echo "✅ Website is live at http://172.26.60.61:3000"
         else
           echo "❌ Server not responding externally"
           echo "Checking server status..."
@@ -135,4 +135,4 @@ jobs:
         fi
         
         echo "🎉 Deployment complete! Website running persistently."
-        echo "🌐 Access your website at: http://192.168.100.143:3000"
+        echo "🌐 Access your website at: http://172.26.60.61:3000"
